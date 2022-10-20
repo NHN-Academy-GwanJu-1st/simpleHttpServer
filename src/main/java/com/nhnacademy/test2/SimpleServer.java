@@ -11,9 +11,9 @@ import java.util.StringTokenizer;
 public class SimpleServer implements Runnable {
 
     private static final int PORT = 12345;
-    private static final String ROOT_DIRECTORY = "D:\\NHNAcademy 강의자료\\http-https\\simple-httpd\\simpleHttpd\\src\\main\\resources";
+    private static final String ROOT_DIRECTORY = "D:\\NHNAcademy 강의자료\\http-https\\simple-httpd\\simpleHttpd";
+    private static final String FILE_NOT_FOUND = "D:\\NHNAcademy 강의자료\\http-https\\simple-httpd\\simpleHttpd\\src\\main\\resources\\404.html";
 
-//    private static String urlParameter = "/";
 
     private Socket socket;
 
@@ -40,16 +40,24 @@ public class SimpleServer implements Runnable {
         }
     }
 
+    static BufferedReader input;
+    static PrintWriter out;
+    static BufferedOutputStream dataOut;
+
     @Override
     public void run() {
 
         try {
 
+            /* HTML 파일 만들기 위한 StringBuilder */
             StringBuilder sb;
 
-            BufferedReader input = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-            PrintWriter out = new PrintWriter(socket.getOutputStream());
-            BufferedOutputStream dataOut = new BufferedOutputStream(socket.getOutputStream());
+//            BufferedReader input = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+//            PrintWriter out = new PrintWriter(socket.getOutputStream());
+//            BufferedOutputStream dataOut = new BufferedOutputStream(socket.getOutputStream());
+            input = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            out = new PrintWriter(socket.getOutputStream());
+            dataOut = new BufferedOutputStream(socket.getOutputStream());
 
             StringTokenizer st = new StringTokenizer(input.readLine());
 
@@ -61,40 +69,9 @@ public class SimpleServer implements Runnable {
             String urlParameter = st.nextToken().toLowerCase();
             System.out.println("requestParameter : " + urlParameter);
 
-
-//            if (!requestParameter.equals("/")) {
-//                urlParameter = urlParameter + requestParameter;
-//            }
-//            System.out.println(urlParameter);
-
-//            if (urlParameter.equals("/")) {
-//                File dir = new File(ROOT_DIRECTORY);
-//                String[] filenames = dir.list();
-//                for (int i = 0; i < filenames.length; i++) {
-//                    System.out.println("file: " + filenames[i]);
-//                }
-
-                sb = htmlBuilder(urlParameter);
-                ByteBuffer byteBuffer = Charset.forName("UTF-8").encode(sb.toString());
-
-                int contentLength = byteBuffer.limit();
-                byte[] content = new byte[contentLength];
-                byteBuffer.get(content, 0, contentLength);
-//            }
-
-            out.println("HTTP/1.1 200 OK");
-            out.println("Date: " + new Date());
-            out.println("Content-Type: text/html");
-            out.println("Content-Length: " + contentLength);
-            out.println("Server: gunicorn/19.9.0");
-            out.println("Access-Control-Allow-Origin: *");
-            out.println("Access-Control-Allow-Credentials: true");
-
-            out.println();
-            out.flush();
-
-            dataOut.write(content);
-            dataOut.flush();
+            if (httpMethod.equals("GET")) {
+                httpGetHandler(urlParameter);
+            }
 
             input.close();
             out.close();
@@ -115,12 +92,6 @@ public class SimpleServer implements Runnable {
         sb.append("   </head>");
         sb.append("   <body>");
         sb.append("           <ul>");
-
-//        if (!urlParameter.equals("/") || !urlParameter.equals("")) {
-//            urlParameter = ROOT_DIRECTORY + urlParameter;
-//        } else {
-//            urlParameter = ROOT_DIRECTORY;
-//        }
 
         System.out.println("htmlBuilder() urlParam : " + urlParameter);
 
@@ -145,5 +116,99 @@ public class SimpleServer implements Runnable {
         return sb;
     }
 
-//    private static void
+    public static byte[] readFileData(File file, int fileLength) throws IOException {
+        FileInputStream fileInputStream = null;
+        byte[] fileData = new byte[fileLength];
+
+        try {
+            System.out.println("readFileData() 파일 절대경로" + file.getAbsolutePath());
+            fileInputStream = new FileInputStream(file);
+            fileInputStream.read(fileData);
+            fileInputStream.close();
+        } catch (FileNotFoundException e) {
+            fileNotFound(file.getPath());
+        }
+
+        return fileData;
+    }
+
+    public static void fileNotFound(String fileRequest) throws IOException {
+        File file = new File(FILE_NOT_FOUND);
+        int fileLength = (int) file.length();
+        String contentType = "text/html";
+        byte[] fileData = readFileData(file, fileLength);
+
+        out.println("HTTP/1.1 404 Not Found");
+        out.println("Date: " + new Date());
+        out.println("Content-Type: " + contentType);
+        out.println("Content-Length: " + fileLength);
+        out.println("Server: gunicorn/19.9.0");
+        out.println("Access-Control-Allow-Origin: *");
+        out.println("Access-Control-Allow-Credentials: true");
+        out.println();
+
+        out.flush();
+
+        dataOut.write(fileData, 0, fileLength);
+        dataOut.flush();
+
+        System.out.println("File " + fileRequest + " not found");
+    }
+
+
+    public static void httpGetHandler(String urlParameter) throws IOException {
+
+        StringBuilder sb;
+
+        // 권한 없는 파일 처리 ex: java
+        if (urlParameter.endsWith("/")) {
+
+            sb = htmlBuilder(urlParameter);
+            ByteBuffer byteBuffer = Charset.forName("UTF-8").encode(sb.toString());
+
+            int contentLength = byteBuffer.limit();
+            byte[] content = new byte[contentLength];
+            byteBuffer.get(content, 0, contentLength);
+
+            out.println("HTTP/1.1 200 OK");
+            out.println("Date: " + new Date());
+            out.println("Content-Type: text/html");
+            out.println("Content-Length: " + contentLength);
+            out.println("Server: gunicorn/19.9.0");
+            out.println("Access-Control-Allow-Origin: *");
+            out.println("Access-Control-Allow-Credentials: true");
+
+            out.println();
+            out.flush();
+
+            dataOut.write(content);
+            dataOut.flush();
+
+        } else if (urlParameter.endsWith(".html")) {
+            File file = new File(ROOT_DIRECTORY, urlParameter);
+            int fileLength = (int) file.length();
+            String contentType = "text/html";
+
+            byte[] fileData = readFileData(file, fileLength);
+
+            out.println("HTTP/1.1 200 OK");
+            out.println("Date: " + new Date());
+            out.println("Content-Type: text/html");
+            out.println("Content-Length: " + fileLength);
+            out.println("Server: gunicorn/19.9.0");
+            out.println("Access-Control-Allow-Origin: *");
+            out.println("Access-Control-Allow-Credentials: true");
+
+            out.println();
+            out.flush();
+
+            dataOut.write(fileData);
+            dataOut.flush();
+
+        }
+
+
+
+    }
+
 }
