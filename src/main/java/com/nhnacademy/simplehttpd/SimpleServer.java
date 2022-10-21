@@ -1,9 +1,11 @@
-package com.nhnacademy.test2;
+package com.nhnacademy.simplehttpd;
 
 import java.io.*;
 import java.net.*;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Date;
 import java.util.StringTokenizer;
 
@@ -62,7 +64,10 @@ public class SimpleServer implements Runnable {
             out = new PrintWriter(socket.getOutputStream());
             dataOut = new BufferedOutputStream(socket.getOutputStream());
 
-            StringTokenizer st = new StringTokenizer(input.readLine());
+
+            String requestHeader = input.readLine();
+            System.out.println(requestHeader);
+            StringTokenizer st = new StringTokenizer(requestHeader);
 
             /* 요청 HTTP Method  ex: GET / (url parameter) HTTP/1.1 */
             String httpMethod = st.nextToken().toUpperCase();
@@ -79,7 +84,7 @@ public class SimpleServer implements Runnable {
             if (httpMethod.equals("GET")) {
                 httpGetHandler(urlParameter);
             } else if (httpMethod.equals("POST")) {
-//                httpPostHandler(url);
+                httpPostHandler(urlParameter);
             } else if (httpMethod.equals("DELETE")) {
                 httpDeleteHandler(urlParameter);
             }
@@ -163,7 +168,6 @@ public class SimpleServer implements Runnable {
         dataOut.write(fileData, 0, fileLength);
         dataOut.flush();
 
-//        System.out.println("File " + fileRequest + " not found");
     }
 
 
@@ -245,10 +249,50 @@ public class SimpleServer implements Runnable {
     }
 
 
-    private static void httpPostHandler() throws IOException {
-        File file = new File("D:\\NHNAcademy 강의자료\\http-https\\simple-httpd\\simpleHttpd\\src\\main\\resources\\post.txt");
+    private static void httpPostHandler(String urlParameter) throws IOException {
+
+        /* POST /src/main/D://test.html HTTP/1.1 */
+
+        /* urlParameter = "/src/main/D://test.html/" */
+
+        String[] split = urlParameter.split(":");
+        char driveName = split[0].charAt(split[0].length() - 1);
+
+        // D://test.html
+        String fileName = Character.toString(driveName).toUpperCase() + ":" + split[1].substring(0, split[1].length() - 1);
+        System.out.println(fileName);
+
+        File file = new File(fileName);
+
+        byte[] fileContent = Files.readAllBytes(Path.of(file.getPath()));
 
 
+        String saveDir = ROOT_DIRECTORY + split[0].substring(0, split[0].length() - 1);
+        String createFileName = saveDir + fileName;
+
+        File createFile = new File(createFileName);
+
+        try (FileOutputStream fileOutputStream = new FileOutputStream(createFile)) {
+            fileOutputStream.write(fileContent);
+        }
+
+        String contentType = "multipart/form-data";
+        int fileLength = (int) createFile.length();
+        byte[] fileData = readFileData(createFile, fileLength);
+
+        out.println("HTTP/1.1 200 OK");
+        out.println("Date: " + new Date());
+        out.println("Content-Type: " + contentType);
+        out.println("Content-Length: " + fileLength);
+        out.println("Server: gunicorn/19.9.0");
+        out.println("Access-Control-Allow-Origin: *");
+        out.println("Access-Control-Allow-Credentials: true");
+        out.println();
+
+        out.flush();
+
+        dataOut.write(fileData, 0, fileLength);
+        dataOut.flush();
 
     }
 
@@ -258,6 +302,7 @@ public class SimpleServer implements Runnable {
 
         try {
             file = new File(ROOT_DIRECTORY, urlParameter);
+            System.out.println(file.getPath());
             if (file.exists()) {
                 if (file.isDirectory()) {
                     File[] files = file.listFiles();
@@ -292,7 +337,7 @@ public class SimpleServer implements Runnable {
     public static void noContent() throws IOException {
         File file = new File(NO_CONTENT);
         int fileLength = (int) file.length();
-        String contentType = "text/html";
+        String contentType = "application/json";
         byte[] fileData = readFileData(file, fileLength);
 
         out.println("HTTP/1.1 203 No Content");
