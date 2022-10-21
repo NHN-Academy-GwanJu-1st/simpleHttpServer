@@ -1,8 +1,7 @@
 package com.nhnacademy.test2;
 
 import java.io.*;
-import java.net.ServerSocket;
-import java.net.Socket;
+import java.net.*;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.util.Date;
@@ -13,6 +12,10 @@ public class SimpleServer implements Runnable {
     private static final int PORT = 12345;
     private static final String ROOT_DIRECTORY = "D:\\NHNAcademy 강의자료\\http-https\\simple-httpd\\simpleHttpd";
     private static final String FILE_NOT_FOUND = "D:\\NHNAcademy 강의자료\\http-https\\simple-httpd\\simpleHttpd\\src\\main\\resources\\404.html";
+
+    private static final String FORIDDEN = "D:\\NHNAcademy 강의자료\\http-https\\simple-httpd\\simpleHttpd\\src\\main\\resources\\403.html";
+
+    private static final String NO_CONTENT = "D:\\NHNAcademy 강의자료\\http-https\\simple-httpd\\simpleHttpd\\src\\main\\resources\\204.html";
 
 
     private Socket socket;
@@ -69,8 +72,16 @@ public class SimpleServer implements Runnable {
             String urlParameter = st.nextToken().toLowerCase();
             System.out.println("requestParameter : " + urlParameter);
 
+
+            String url = input.readLine().split(" ")[1];
+            System.out.println(url);
+
             if (httpMethod.equals("GET")) {
                 httpGetHandler(urlParameter);
+            } else if (httpMethod.equals("POST")) {
+//                httpPostHandler(url);
+            } else if (httpMethod.equals("DELETE")) {
+                httpDeleteHandler(urlParameter);
             }
 
             input.close();
@@ -126,13 +137,13 @@ public class SimpleServer implements Runnable {
             fileInputStream.read(fileData);
             fileInputStream.close();
         } catch (FileNotFoundException e) {
-            fileNotFound(file.getPath());
+            fileNotFound();
         }
 
         return fileData;
     }
 
-    public static void fileNotFound(String fileRequest) throws IOException {
+    public static void fileNotFound() throws IOException {
         File file = new File(FILE_NOT_FOUND);
         int fileLength = (int) file.length();
         String contentType = "text/html";
@@ -152,7 +163,7 @@ public class SimpleServer implements Runnable {
         dataOut.write(fileData, 0, fileLength);
         dataOut.flush();
 
-        System.out.println("File " + fileRequest + " not found");
+//        System.out.println("File " + fileRequest + " not found");
     }
 
 
@@ -205,10 +216,97 @@ public class SimpleServer implements Runnable {
             dataOut.write(fileData);
             dataOut.flush();
 
+        } else if (urlParameter.endsWith(".java")) {        // 읽기 권한이 없는 파일 (ex: java 파일 등등...)
+            foriddenError();
+        } else {
+            fileNotFound();
         }
+    }
+
+    public static void foriddenError() throws IOException {
+        File file = new File(FORIDDEN);
+        int fileLength = (int) file.length();
+        String contentType = "text/html";
+        byte[] fileData = readFileData(file, fileLength);
+
+        out.println("HTTP/1.1 403 Not Found");
+        out.println("Date: " + new Date());
+        out.println("Content-Type: " + contentType);
+        out.println("Content-Length: " + fileLength);
+        out.println("Server: gunicorn/19.9.0");
+        out.println("Access-Control-Allow-Origin: *");
+        out.println("Access-Control-Allow-Credentials: true");
+        out.println();
+
+        out.flush();
+
+        dataOut.write(fileData, 0, fileLength);
+        dataOut.flush();
+    }
+
+
+    private static void httpPostHandler() throws IOException {
+        File file = new File("D:\\NHNAcademy 강의자료\\http-https\\simple-httpd\\simpleHttpd\\src\\main\\resources\\post.txt");
 
 
 
     }
 
+    private static void httpDeleteHandler(String urlParameter) throws IOException {
+
+        File file = null;
+
+        try {
+            file = new File(ROOT_DIRECTORY, urlParameter);
+            if (file.exists()) {
+                if (file.isDirectory()) {
+                    File[] files = file.listFiles();
+
+                    for (int i = 0; i < files.length; i++) {
+                        if (files[i].delete()) {
+                            System.out.println(files[i].getName() + " 삭제 성공");
+                        } else {
+                            System.out.println(files[i].getName() + " 삭제 실패");
+                        }
+                    }
+                }
+
+                if (file.delete()) {
+                    System.out.println("파일 삭제 성공");
+                    noContent();
+                } else {
+                    System.out.println("파일 삭제 실패");
+                    foriddenError();
+                }
+            } else {
+                System.out.println("파일이 존재 하지 않음");
+                noContent();
+            }
+
+        } catch (FileNotFoundException e) {
+            noContent();
+        }
+    }
+
+
+    public static void noContent() throws IOException {
+        File file = new File(NO_CONTENT);
+        int fileLength = (int) file.length();
+        String contentType = "text/html";
+        byte[] fileData = readFileData(file, fileLength);
+
+        out.println("HTTP/1.1 203 No Content");
+        out.println("Date: " + new Date());
+        out.println("Content-Type: " + contentType);
+        out.println("Content-Length: " + fileLength);
+        out.println("Server: gunicorn/19.9.0");
+        out.println("Access-Control-Allow-Origin: *");
+        out.println("Access-Control-Allow-Credentials: true");
+        out.println();
+
+        out.flush();
+
+        dataOut.write(fileData, 0, fileLength);
+        dataOut.flush();
+    }
 }
